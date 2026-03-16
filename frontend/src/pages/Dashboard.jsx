@@ -1,24 +1,35 @@
 import { useState, useEffect } from 'react';
-import { Activity, Users, CheckCircle } from 'lucide-react';
+import { Activity, Users, CheckCircle, AlertCircle, AlertTriangle, Wrench } from 'lucide-react';
 import CheckInModal from '../components/CheckInModal';
 
 export default function Dashboard() {
     const [stats, setStats] = useState({ todayCheckins: 0, activeMembers: 0, gymCapacity: 0 });
     const [recentCheckins, setRecentCheckins] = useState([]);
+    const [unpaidMembers, setUnpaidMembers] = useState([]); 
+    const [brokenMachines, setBrokenMachines] = useState([]); 
     const [showCheckInModal, setShowCheckInModal] = useState(false);
 
-    // Assuming a max capacity of 100 for the indicator
     const MAX_CAPACITY = 100;
 
     const fetchDashboardData = async () => {
         try {
-            // Fetch today's checkins
+            // 1. Fetch today's checkins
             const checkinsRes = await fetch('http://localhost:5000/api/checkins/today');
             const checkinsData = await checkinsRes.json();
 
-            // Fetch all members to count active ones
+            // 2. Fetch all members to count active ones
             const membersRes = await fetch('http://localhost:5000/api/members');
             const membersData = await membersRes.json();
+
+            // 3. Fetch unpaid members
+            const unpaidRes = await fetch('http://localhost:5000/api/members/unpaid');
+            const unpaidData = await unpaidRes.json();
+            setUnpaidMembers(unpaidData);
+
+            // 4. Fetch broken machines
+            const machinesRes = await fetch('http://localhost:5000/api/machines/broken');
+            const machinesData = await machinesRes.json();
+            setBrokenMachines(machinesData);
 
             const activeCount = membersData.filter(m => m.status === 'Active').length;
 
@@ -28,7 +39,6 @@ export default function Dashboard() {
                 gymCapacity: Math.min(Math.round((checkinsData.length / MAX_CAPACITY) * 100), 100)
             });
 
-            // Map checkins to display format
             const formattedCheckins = checkinsData.map(ci => {
                 const date = new Date(ci.timestamp);
                 return {
@@ -38,7 +48,7 @@ export default function Dashboard() {
                     time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                     status: ci.memberId ? ci.memberId.status : 'Unknown'
                 };
-            }).reverse(); // Show most recent first
+            }).reverse();
 
             setRecentCheckins(formattedCheckins);
         } catch (err) {
@@ -52,7 +62,7 @@ export default function Dashboard() {
 
     const handleCheckInSuccess = () => {
         setShowCheckInModal(false);
-        fetchDashboardData(); // Refresh the stats immediately
+        fetchDashboardData();
     };
 
     return (
@@ -66,6 +76,46 @@ export default function Dashboard() {
                     <CheckCircle size={18} /> Quick Check-in
                 </button>
             </header>
+
+            {/* --- MACHINE UPKEEP ALERT --- */}
+            {brokenMachines.length > 0 && (
+                <div style={machineAlertStyle}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <AlertTriangle color="#ffa502" size={28} />
+                        <div>
+                            <h3 style={{ color: '#ffa502', margin: 0, fontSize: '1.1rem' }}>Machine Maintenance Required</h3>
+                            <p style={{ margin: 0, fontSize: '0.9rem', color: 'rgba(255, 165, 2, 0.8)' }}>
+                                {brokenMachines.length} machine(s) are currently reported as broken.
+                            </p>
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+                        {brokenMachines.map(m => (
+                            <span key={m._id} style={machineTagStyle}>
+                                <Wrench size={12} /> {m.name}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* --- UNPAID MONEY ALERTS --- */}
+            {unpaidMembers.length > 0 && (
+                <div style={alertContainerStyle}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
+                        <AlertCircle color="#ff4d4d" size={24} />
+                        <h2 style={{ color: '#ff4d4d', margin: 0, fontSize: '1.25rem' }}>Unpaid Money Alerts</h2>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
+                        {unpaidMembers.map(member => (
+                            <div key={member._id} style={alertCardStyle}>
+                                <span style={{ fontWeight: 'bold', color: 'white' }}>{member.name}</span>
+                                <span style={{ fontSize: '0.85rem', color: '#ff4d4d' }}>Status: {member.paymentStatus || 'Unpaid'}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
                 <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
@@ -112,7 +162,6 @@ export default function Dashboard() {
                             ))}
                         </tbody>
                     </table>
-                    {recentCheckins.length === 0 && <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No check-ins today yet. Click 'Quick Check-in' to start.</p>}
                 </div>
             </div>
 
@@ -125,3 +174,42 @@ export default function Dashboard() {
         </div>
     );
 }
+
+// Styles
+const machineAlertStyle = {
+    background: 'rgba(255, 165, 2, 0.1)',
+    border: '1px solid rgba(255, 165, 2, 0.3)',
+    padding: '1.2rem',
+    borderRadius: '12px',
+    marginBottom: '1.5rem',
+};
+
+const machineTagStyle = {
+    background: 'rgba(255, 165, 2, 0.2)',
+    color: '#ffa502',
+    padding: '4px 10px',
+    borderRadius: '6px',
+    fontSize: '0.8rem',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px',
+    border: '1px solid rgba(255, 165, 2, 0.2)'
+};
+
+const alertContainerStyle = {
+    background: 'rgba(255, 77, 77, 0.05)',
+    border: '1px solid rgba(255, 77, 77, 0.2)',
+    padding: '1.5rem',
+    borderRadius: '12px',
+    marginBottom: '2.5rem'
+};
+
+const alertCardStyle = {
+    background: 'rgba(0, 0, 0, 0.2)',
+    padding: '10px 15px',
+    borderRadius: '8px',
+    borderLeft: '4px solid #ff4d4d',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px'
+};

@@ -5,6 +5,21 @@ const Receipt = require('../models/Receipt');
 
 const router = express.Router();
 
+/**
+ * FEATURE 9: Get members with unpaid balances
+ * Always placed above generic ID routes
+ */
+router.get('/unpaid', async (req, res) => {
+    try {
+        const unpaidMembers = await Member.find({ 
+            paymentStatus: { $ne: 'Paid' } 
+        }).populate('currentPlan');
+        res.json(unpaidMembers);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Get all members
 router.get('/', async (req, res) => {
     try {
@@ -12,6 +27,32 @@ router.get('/', async (req, res) => {
         res.json(members);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * UPDATED PUT ROUTE: Uses .save() for "Aggressive Saving"
+ * This ensures paymentStatus: 'Paid' actually sticks in the DB.
+ */
+router.put('/:id', async (req, res) => {
+    try {
+        const member = await Member.findById(req.params.id);
+        
+        if (!member) {
+            return res.status(404).json({ error: 'Member not found' });
+        }
+
+        // Merge the incoming updates (like paymentStatus) into the member object
+        Object.assign(member, req.body);
+
+        // .save() is more reliable than findByIdAndUpdate for new schema fields
+        const updatedMember = await member.save();
+        
+        console.log(`Update successful for ${updatedMember.name}: Status is now ${updatedMember.paymentStatus}`);
+        res.json(updatedMember);
+    } catch (err) {
+        console.error("Database Save Error:", err);
+        res.status(400).json({ error: err.message });
     }
 });
 
@@ -42,9 +83,10 @@ router.post('/:id/renew', async (req, res) => {
         member.currentPlan = planId;
         member.expiryDate = newExpiryDate;
         member.status = 'Active';
+        member.paymentStatus = 'Unpaid'; // Reset on renewal
+        
         await member.save();
 
-        // Generate a receipt
         const receipt = new Receipt({
             memberId: member._id,
             planId: plan._id,
@@ -55,16 +97,6 @@ router.post('/:id/renew', async (req, res) => {
         res.json({ member, receipt });
     } catch (err) {
         res.status(500).json({ error: err.message });
-    }
-});
-
-// Update member details
-router.put('/:id', async (req, res) => {
-    try {
-        const member = await Member.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        res.json(member);
-    } catch (err) {
-        res.status(400).json({ error: err.message });
     }
 });
 

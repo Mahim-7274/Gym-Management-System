@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, RefreshCw, Edit, Trash2 } from 'lucide-react';
+import { Search, Plus, RefreshCw, Edit, Trash2, CheckCircle } from 'lucide-react';
 import MemberFormModal from '../components/MemberFormModal';
 import ReceiptModal from '../components/ReceiptModal';
 
 export default function Members() {
     const [members, setMembers] = useState([]);
     const [plans, setPlans] = useState([]);
+    const [searchTerm, setSearchTerm] = useState("");
     const [showMemberForm, setShowMemberForm] = useState(false);
     const [showReceipt, setShowReceipt] = useState(false);
     const [selectedReceipt, setSelectedReceipt] = useState(null);
@@ -36,15 +37,31 @@ export default function Members() {
         fetchPlans();
     }, []);
 
+    // Fixed handleMarkAsPaid for instant UI update
+    const handleMarkAsPaid = async (id) => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/members/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paymentStatus: 'Paid' })
+            });
+
+            if (res.ok) {
+                // Update the state immediately
+                setMembers(prev => prev.map(m => m._id === id ? { ...m, paymentStatus: 'Paid' } : m));
+                alert("Payment status updated to Paid!");
+            }
+        } catch (err) {
+            console.error('Error updating payment:', err);
+        }
+    };
+
     const handleSaveMember = async (memberData) => {
         try {
             const method = memberData._id ? 'PUT' : 'POST';
             const url = memberData._id ? `http://localhost:5000/api/members/${memberData._id}` : 'http://localhost:5000/api/members';
-
             const payload = { ...memberData };
-            if (payload.planId) {
-                payload.currentPlan = payload.planId;
-            }
+            if (payload.planId) payload.currentPlan = payload.planId;
 
             const res = await fetch(url, {
                 method,
@@ -62,25 +79,18 @@ export default function Members() {
     };
 
     const handleDeleteMember = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this member?')) return;
+        if (!window.confirm('Are you sure?')) return;
         try {
-            const res = await fetch(`http://localhost:5000/api/members/${id}`, {
-                method: 'DELETE'
-            });
-            if (res.ok) {
-                fetchMembers();
-            }
+            const res = await fetch(`http://localhost:5000/api/members/${id}`, { method: 'DELETE' });
+            if (res.ok) fetchMembers();
         } catch (err) {
             console.error('Error deleting member:', err);
         }
     };
 
     const handleRenewPlan = async (member) => {
-        let planId = member.currentPlan?._id;
-        if (!planId) {
-            if (plans.length > 0) planId = plans[0]._id;
-            else return alert("No plans available to renew with!");
-        }
+        let planId = member.currentPlan?._id || (plans.length > 0 ? plans[0]._id : null);
+        if (!planId) return alert("No plans available!");
 
         try {
             const res = await fetch(`http://localhost:5000/api/members/${member._id}/renew`, {
@@ -103,93 +113,83 @@ export default function Members() {
         }
     };
 
+    const filteredMembers = members.filter(m => 
+        m.name.toLowerCase().includes(searchTerm.toLowerCase()) || (m.phone && m.phone.includes(searchTerm))
+    );
+
     return (
         <div className="animate-fade-in">
-            <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <header style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                     <h1>Member Details</h1>
-                    <p>Manage all your gym memberships in one place.</p>
+                    <p>Manage memberships and payment tracking.</p>
                 </div>
                 <div style={{ display: 'flex', gap: '1rem' }}>
                     <div style={{ position: 'relative' }}>
-                        <Search size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                        <input type="text" className="form-control" placeholder="Search members..." style={{ paddingLeft: '2.8rem', width: '250px' }} />
+                        <Search size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'gray' }} />
+                        <input 
+                            type="text" 
+                            className="form-control" 
+                            placeholder="Search..." 
+                            style={{ paddingLeft: '2.8rem' }}
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
                     </div>
                     <button className="btn btn-primary" onClick={() => { setEditingMember(null); setShowMemberForm(true); }}>
-                        <Plus size={18} /> Add New Member
+                        <Plus size={18} /> Add New
                     </button>
                 </div>
             </header>
 
             <div className="glass-panel" style={{ padding: '0', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                    <thead style={{ background: 'rgba(255,255,255,0.02)' }}>
-                        <tr style={{ borderBottom: '1px solid var(--border-glass)', color: 'var(--text-secondary)' }}>
-                            <th style={{ padding: '1.2rem 1.5rem' }}>Name</th>
-                            <th style={{ padding: '1.2rem 1.5rem' }}>Phone</th>
-                            <th style={{ padding: '1.2rem 1.5rem' }}>Status</th>
-                            <th style={{ padding: '1.2rem 1.5rem' }}>Plan</th>
-                            <th style={{ padding: '1.2rem 1.5rem' }}>Expiry Date</th>
-                            <th style={{ padding: '1.2rem 1.5rem', textAlign: 'right' }}>Actions</th>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)' }}>
+                            <th style={{ padding: '1.2rem' }}>Name</th>
+                            <th style={{ padding: '1.2rem' }}>Phone</th>
+                            <th style={{ padding: '1.2rem' }}>Status</th>
+                            <th style={{ padding: '1.2rem' }}>Payment</th>
+                            <th style={{ padding: '1.2rem' }}>Plan</th>
+                            <th style={{ padding: '1.2rem' }}>Expiry</th>
+                            <th style={{ padding: '1.2rem', textAlign: 'right' }}>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {members.map(member => {
-                            const currentPlanName = member.currentPlan ? member.currentPlan.name : 'No Plan';
-                            const expiryDateStr = member.expiryDate ? new Date(member.expiryDate).toLocaleDateString() : 'N/A';
-
+                        {filteredMembers.map(member => {
+                            const isUnpaid = member.paymentStatus !== 'Paid';
                             return (
-                                <tr key={member._id} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)', transition: 'background 0.2s' }}>
-                                    <td style={{ padding: '1.2rem 1.5rem', fontWeight: '500' }}>{member.name}</td>
-                                    <td style={{ padding: '1.2rem 1.5rem', color: 'var(--text-secondary)' }}>{member.phone}</td>
-                                    <td style={{ padding: '1.2rem 1.5rem' }}>
-                                        <span className={`badge ${member.status === 'Active' ? 'badge-active' : 'badge-expired'}`}>
-                                            {member.status}
+                                <tr key={member._id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <td style={{ padding: '1.2rem' }}>{member.name}</td>
+                                    <td style={{ padding: '1.2rem' }}>{member.phone}</td>
+                                    <td style={{ padding: '1.2rem' }}>
+                                        <span className={`badge ${member.status === 'Active' ? 'badge-active' : 'badge-expired'}`}>{member.status}</span>
+                                    </td>
+                                    <td style={{ padding: '1.2rem' }}>
+                                        <span className={`badge ${!isUnpaid ? 'badge-active' : 'badge-expired'}`}>
+                                            {member.paymentStatus || 'Unpaid'}
                                         </span>
                                     </td>
-                                    <td style={{ padding: '1.2rem 1.5rem' }}>{currentPlanName}</td>
-                                    <td style={{ padding: '1.2rem 1.5rem', color: 'var(--text-secondary)' }}>{expiryDateStr}</td>
-                                    <td style={{ padding: '1.2rem 1.5rem', textAlign: 'right', display: 'flex', gap: '0.8rem', justifyContent: 'flex-end' }}>
-                                        <button className="btn btn-secondary" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }} onClick={() => { setEditingMember(member); setShowMemberForm(true); }}>
-                                            <Edit size={16} /> Edit
-                                        </button>
-                                        <button className="btn btn-danger" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }} title="Delete Member" onClick={() => handleDeleteMember(member._id)}>
-                                            <Trash2 size={16} /> Delete
-                                        </button>
-                                        {member.status === 'Expired' && (
-                                            <button className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }} onClick={() => handleRenewPlan(member)}>
-                                                <RefreshCw size={16} /> Renew
+                                    <td style={{ padding: '1.2rem' }}>{member.currentPlan?.name || 'N/A'}</td>
+                                    <td style={{ padding: '1.2rem' }}>{member.expiryDate ? new Date(member.expiryDate).toLocaleDateString() : 'N/A'}</td>
+                                    <td style={{ padding: '1.2rem', textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                        {isUnpaid && (
+                                            <button className="btn btn-primary" style={{ background: '#00ff88', color: 'black' }} onClick={() => handleMarkAsPaid(member._id)}>
+                                                <CheckCircle size={14} /> Paid
                                             </button>
                                         )}
+                                        <button className="btn btn-secondary" onClick={() => { setEditingMember(member); setShowMemberForm(true); }}><Edit size={14} /></button>
+                                        <button className="btn btn-danger" onClick={() => handleDeleteMember(member._id)}><Trash2 size={14} /></button>
                                     </td>
                                 </tr>
                             );
                         })}
-                        {members.length === 0 && (
-                            <tr>
-                                <td colSpan="6" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                                    No members found. Add one to get started!
-                                </td>
-                            </tr>
-                        )}
                     </tbody>
                 </table>
             </div>
 
-            {showMemberForm && (
-                <MemberFormModal
-                    initialData={editingMember}
-                    onClose={() => setShowMemberForm(false)}
-                    onSave={handleSaveMember}
-                />
-            )}
-
-            {showReceipt && selectedReceipt && (
-                <ReceiptModal
-                    receipt={selectedReceipt}
-                    onClose={() => setShowReceipt(false)}
-                />
-            )}
+            {showMemberForm && <MemberFormModal initialData={editingMember} onClose={() => setShowMemberForm(false)} onSave={handleSaveMember} />}
+            {showReceipt && selectedReceipt && <ReceiptModal receipt={selectedReceipt} onClose={() => setShowReceipt(false)} />}
         </div>
     );
 }

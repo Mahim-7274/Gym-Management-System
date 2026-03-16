@@ -15,6 +15,10 @@ const memberRoutes = require('./routes/memberRoutes');
 const planRoutes = require('./routes/planRoutes');
 const checkInRoutes = require('./routes/checkInRoutes');
 const receiptRoutes = require('./routes/receiptRoutes');
+const workerRoutes = require('./routes/worker');
+const progressRoutes = require('./routes/progress.route');
+const machineRoutes = require('./routes/machine.route');
+
 
 // Database Connection
 mongoose.connect(process.env.MONGODB_URI)
@@ -26,6 +30,9 @@ app.use('/api/members', memberRoutes);
 app.use('/api/plans', planRoutes);
 app.use('/api/checkins', checkInRoutes);
 app.use('/api/receipts', receiptRoutes);
+app.use('/api/workers', workerRoutes);
+app.use('/api/progress', progressRoutes);
+app.use('/api/machines', machineRoutes);
 
 // Basic route
 app.get('/', (req, res) => {
