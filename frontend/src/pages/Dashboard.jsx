@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Activity, Users, CheckCircle, AlertCircle, AlertTriangle, Wrench, TrendingUp, Cake } from 'lucide-react';
 import CheckInModal from '../components/CheckInModal';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { API_BASE_URL, fetchArray } from '../utils/api';
+
+const MAX_CAPACITY = 100;
 
 export default function Dashboard() {
     const [stats, setStats] = useState({ todayCheckins: 0, activeMembers: 0, gymCapacity: 0 });
@@ -14,9 +16,7 @@ export default function Dashboard() {
     const [revenueData, setRevenueData] = useState([]);
     const [newMembersData, setNewMembersData] = useState([]);
 
-    const MAX_CAPACITY = 100;
-
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = useCallback(async () => {
         try {
             const [
                 checkinsData,
@@ -65,11 +65,11 @@ export default function Dashboard() {
         } catch (err) {
             console.error('Error fetching dashboard data:', err);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchDashboardData();
-    }, []);
+    }, [fetchDashboardData]);
 
     const handleCheckInSuccess = () => {
         setShowCheckInModal(false);

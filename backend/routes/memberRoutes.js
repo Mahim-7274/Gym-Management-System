@@ -3,24 +3,37 @@ const Member = require('../models/Member');
 const Plan = require('../models/Plan');
 const Receipt = require('../models/Receipt');
 const upload = require('../config/upload');
+const { protect } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
+const getMonthDayKey = (date) => {
+    if (!date) return null;
+    const parsedDate = new Date(date);
+    if (Number.isNaN(parsedDate.getTime())) return null;
+
+    const month = String(parsedDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(parsedDate.getUTCDate()).padStart(2, '0');
+    return `${month}-${day}`;
+};
+
+const getTodayMonthDayKey = () => {
+    const today = new Date();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${month}-${day}`;
+};
+
 // Get members whose birthday is today. Month/day only, year ignored.
-router.get('/birthdays/today', async (req, res) => {
+router.get('/birthdays/today', protect, async (req, res) => {
     try {
-        const today = new Date();
-        const todayMonth = today.getMonth();
-        const todayDate = today.getDate();
+        const todayKey = getTodayMonthDayKey();
 
         const members = await Member.find({
             dateOfBirth: { $exists: true, $ne: null }
         }).populate('currentPlan');
 
-        const birthdayMembers = members.filter((member) => {
-            const birthDate = new Date(member.dateOfBirth);
-            return birthDate.getMonth() === todayMonth && birthDate.getDate() === todayDate;
-        });
+        const birthdayMembers = members.filter((member) => getMonthDayKey(member.dateOfBirth) === todayKey);
 
         res.json(birthdayMembers);
     } catch (err) {
@@ -44,7 +57,7 @@ router.get('/unpaid', async (req, res) => {
 });
 
 // Get all members
-router.get('/', async (req, res) => {
+router.get('/', protect, async (req, res) => {
     try {
         const members = await Member.find().populate('currentPlan').sort({ createdAt: -1 });
         res.json(members);

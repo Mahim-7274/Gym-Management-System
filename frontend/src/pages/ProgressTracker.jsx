@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+
+const API_URL = `${API_BASE_URL}/api/progress`;
 
 const ProgressTracker = () => {
     const [logs, setLogs] = useState([]);
     const [memberId, setMemberId] = useState(""); 
     const [formData, setFormData] = useState({ weight: '', chest: '', waist: '' });
 
-    const API_URL = `${API_BASE_URL}/api/progress`;
-
-    const fetchHistory = async () => {
+    const fetchHistory = useCallback(async () => {
         const cleanId = memberId.trim();
         if (!cleanId || cleanId.length < 5) return; 
         try {
@@ -18,7 +18,7 @@ const ProgressTracker = () => {
         } catch (err) { 
             console.error("Error fetching history", err); 
         }
-    };
+    }, [memberId]);
 
     useEffect(() => {
         const delayDebounceFn = setTimeout(() => {
@@ -26,7 +26,7 @@ const ProgressTracker = () => {
         }, 500); 
 
         return () => clearTimeout(delayDebounceFn);
-    }, [memberId]);
+    }, [fetchHistory, memberId]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -35,7 +35,7 @@ const ProgressTracker = () => {
             setFormData({ weight: '', chest: '', waist: '' });
             await fetchHistory(); 
             alert("Progress Logged!");
-        } catch (err) { 
+        } catch { 
             alert("Error saving progress"); 
         }
     };

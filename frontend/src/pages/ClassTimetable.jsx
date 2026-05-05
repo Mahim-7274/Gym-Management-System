@@ -1,10 +1,31 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Edit, Plus, Save, Trash2 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL, fetchArray } from '../utils/api';
+import { useAuth } from '../context/useAuth';
+import { API_BASE_URL, fetchArray, requestJson } from '../utils/api';
 
 const API_URL = `${API_BASE_URL}/api/class-timetable`;
 const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+const timeToMinutes = (time) => {
+    const value = String(time || '').trim().toUpperCase();
+    const match = value.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+
+    if (!match) {
+        return Number.MAX_SAFE_INTEGER;
+    }
+
+    let hour = Number(match[1]);
+    const minute = Number(match[2]);
+    const meridiem = match[3];
+
+    if (meridiem === 'AM' && hour === 12) {
+        hour = 0;
+    } else if (meridiem === 'PM' && hour !== 12) {
+        hour += 12;
+    }
+
+    return hour * 60 + minute;
+};
 
 export default function ClassTimetable() {
     const { user } = useAuth();
@@ -21,27 +42,27 @@ export default function ClassTimetable() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    const sortedClasses = [...classes].sort((a, b) => {
+    const sortedClasses = useMemo(() => [...classes].sort((a, b) => {
         const dayDiff = dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day);
-        return dayDiff !== 0 ? dayDiff : a.time.localeCompare(b.time);
-    });
+        return dayDiff !== 0 ? dayDiff : timeToMinutes(a.time) - timeToMinutes(b.time);
+    }), [classes]);
 
-    const fetchClasses = async () => {
+    const fetchClasses = useCallback(async () => {
         try {
             setLoading(true);
-            const data = await fetchArray(API_URL);
+            const data = await fetchArray(API_URL, { throwOnError: true });
             setClasses(data);
             setError('');
         } catch (err) {
-            setError('Could not load class timetable.');
+            setError(err.message || 'Could not load class timetable.');
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchClasses();
-    }, []);
+    }, [fetchClasses]);
 
     const resetForm = () => {
         setEditingId(null);
@@ -60,22 +81,21 @@ export default function ClassTimetable() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!isAdmin) {
+            setError('Only admins can manage timetable entries.');
+            return;
+        }
+
         try {
-            const res = await fetch(editingId ? `${API_URL}/${editingId}` : API_URL, {
+            await requestJson(editingId ? `${API_URL}/${editingId}` : API_URL, {
                 method: editingId ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
             });
 
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.error || 'Could not save class.');
-            }
-
             resetForm();
-            fetchClasses();
+            await fetchClasses();
         } catch (err) {
-            setError(err.message);
+            setError(err.message || 'Could not save class.');
         }
     };
 
@@ -94,10 +114,10 @@ export default function ClassTimetable() {
         if (!window.confirm('Delete this class?')) return;
 
         try {
-            const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
-            if (res.ok) fetchClasses();
+            await requestJson(`${API_URL}/${id}`, { method: 'DELETE' });
+            await fetchClasses();
         } catch (err) {
-            setError('Could not delete class.');
+            setError(err.message || 'Could not delete class.');
         }
     };
 

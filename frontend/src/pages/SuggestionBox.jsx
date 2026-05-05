@@ -1,9 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle, MessageSquare, Send } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL, fetchArray } from '../utils/api';
+import { useAuth } from '../context/useAuth';
+import { API_BASE_URL, fetchArray, requestJson } from '../utils/api';
 
 const API_URL = `${API_BASE_URL}/api/suggestions`;
+const suggestionStatuses = ['New', 'Reviewed', 'Resolved'];
+
+const getRoleType = (role) => {
+    if (role === 'admin') return 'Admin';
+    if (role === 'trainer') return 'Trainer';
+    if (role === 'staff') return 'Staff';
+    return 'Member';
+};
 
 export default function SuggestionBox() {
     const { user } = useAuth();
@@ -11,7 +19,7 @@ export default function SuggestionBox() {
     const [suggestions, setSuggestions] = useState([]);
     const [formData, setFormData] = useState({
         name: user?.username || '',
-        roleType: user?.role === 'admin' ? 'Admin' : 'Staff',
+        roleType: getRoleType(user?.role),
         category: 'Feedback',
         message: ''
     });
@@ -19,22 +27,28 @@ export default function SuggestionBox() {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
-    const fetchSuggestions = async () => {
+    const fetchSuggestions = useCallback(async () => {
+        if (!isAdmin) {
+            setSuggestions([]);
+            setLoading(false);
+            return;
+        }
+
         try {
             setLoading(true);
-            const data = await fetchArray(API_URL);
+            const data = await fetchArray(API_URL, { throwOnError: true });
             setSuggestions(data);
             setError('');
         } catch (err) {
-            setError('Could not load suggestions.');
+            setError(err.message || 'Could not load suggestions.');
         } finally {
             setLoading(false);
         }
-    };
+    }, [isAdmin]);
 
     useEffect(() => {
         fetchSuggestions();
-    }, []);
+    }, [fetchSuggestions]);
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -46,36 +60,32 @@ export default function SuggestionBox() {
         setSuccess('');
 
         try {
-            const res = await fetch(API_URL, {
+            await requestJson(API_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
             });
 
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.error || 'Could not submit suggestion.');
-            }
-
             setFormData({ ...formData, message: '' });
             setSuccess('Suggestion submitted.');
-            fetchSuggestions();
+            await fetchSuggestions();
         } catch (err) {
-            setError(err.message);
+            setError(err.message || 'Could not submit suggestion.');
         }
     };
 
     const handleStatusChange = async (id, status) => {
+        setError('');
+        setSuccess('');
+
         try {
-            const res = await fetch(`${API_URL}/${id}`, {
+            await requestJson(`${API_URL}/${id}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status })
             });
-
-            if (res.ok) fetchSuggestions();
+            setSuccess('Suggestion status updated.');
+            await fetchSuggestions();
         } catch (err) {
-            setError('Could not update suggestion status.');
+            setError(err.message || 'Could not update suggestion status.');
         }
     };
 
@@ -92,7 +102,7 @@ export default function SuggestionBox() {
                 </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 420px) 1fr', gap: '2rem', alignItems: 'start' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isAdmin ? 'minmax(320px, 420px) 1fr' : 'minmax(320px, 520px)', gap: '2rem', alignItems: 'start' }}>
                 <div className="glass-panel" style={{ padding: '2rem' }}>
                     <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem' }}>
                         <Send size={20} color="var(--accent-primary)" />
@@ -138,6 +148,7 @@ export default function SuggestionBox() {
                     </form>
                 </div>
 
+                {isAdmin && (
                 <div>
                     <h2 style={{ marginBottom: '1rem' }}>Submitted Suggestions</h2>
 
@@ -165,12 +176,16 @@ export default function SuggestionBox() {
 
                                     {isAdmin && (
                                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                            <button className="btn btn-secondary" onClick={() => handleStatusChange(suggestion._id, 'Reviewed')}>
-                                                <CheckCircle size={16} /> Mark Reviewed
-                                            </button>
-                                            <button className="btn btn-success" onClick={() => handleStatusChange(suggestion._id, 'Resolved')}>
-                                                <CheckCircle size={16} /> Mark Resolved
-                                            </button>
+                                            {suggestionStatuses.map(status => (
+                                                <button
+                                                    key={status}
+                                                    className={status === 'Resolved' ? 'btn btn-success' : 'btn btn-secondary'}
+                                                    disabled={suggestion.status === status}
+                                                    onClick={() => handleStatusChange(suggestion._id, status)}
+                                                >
+                                                    <CheckCircle size={16} /> {status}
+                                                </button>
+                                            ))}
                                         </div>
                                     )}
                                 </div>
@@ -178,6 +193,7 @@ export default function SuggestionBox() {
                         </div>
                     )}
                 </div>
+                )}
             </div>
         </div>
     );

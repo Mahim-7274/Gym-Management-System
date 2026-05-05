@@ -1,10 +1,12 @@
 const express = require('express');
 const Suggestion = require('../models/Suggestion');
+const { protect, adminOnly } = require('../middleware/authMiddleware');
 
 const router = express.Router();
+const allowedStatuses = ['New', 'Reviewed', 'Resolved'];
 
 // List submitted suggestions.
-router.get('/', async (req, res) => {
+router.get('/', protect, adminOnly, async (req, res) => {
     try {
         const suggestions = await Suggestion.find().sort({ createdAt: -1 });
         res.json(suggestions);
@@ -14,9 +16,14 @@ router.get('/', async (req, res) => {
 });
 
 // Submit a new suggestion.
-router.post('/', async (req, res) => {
+router.post('/', protect, async (req, res) => {
     try {
-        const suggestion = new Suggestion(req.body);
+        const suggestion = new Suggestion({
+            name: req.body.name,
+            roleType: req.body.roleType,
+            category: req.body.category,
+            message: req.body.message
+        });
         await suggestion.save();
         res.status(201).json(suggestion);
     } catch (err) {
@@ -25,9 +32,13 @@ router.post('/', async (req, res) => {
 });
 
 // Update suggestion status.
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', protect, adminOnly, async (req, res) => {
     try {
         const { status } = req.body;
+        if (!allowedStatuses.includes(status)) {
+            return res.status(400).json({ error: 'Invalid suggestion status' });
+        }
+
         const suggestion = await Suggestion.findByIdAndUpdate(
             req.params.id,
             { status },

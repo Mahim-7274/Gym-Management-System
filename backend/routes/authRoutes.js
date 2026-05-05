@@ -3,10 +3,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const User = require('../models/User');
+const { getJwtSecret } = require('../config/auth');
 
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_key';
 const DEMO_PASSWORD = 'password123';
 const DEMO_USERS = [
     { username: 'admin', password: DEMO_PASSWORD, role: 'admin' },
@@ -35,7 +35,7 @@ const sendLoginResponse = (res, user) => {
         role: user.role
     };
 
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+    const token = jwt.sign(payload, getJwtSecret(), { expiresIn: '1d' });
 
     return res.json({
         message: 'Login successful',

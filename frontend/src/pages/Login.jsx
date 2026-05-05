@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Lock, User } from 'lucide-react';
 import { API_BASE_URL } from '../utils/api';
@@ -33,7 +33,7 @@ export default function Login() {
             } else {
                 setError(data.error || 'Login failed');
             }
-        } catch (err) {
+        } catch {
             setError('Server error. Please try again later.');
         } finally {
             setIsLoading(false);

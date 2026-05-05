@@ -1,22 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+
+const API_URL = `${API_BASE_URL}/api/workers`;
 
 const Workers = () => {
     const [workers, setWorkers] = useState([]);
     const [searchTerm, setSearchTerm] = useState(""); // NEW: For the search bar
     const [formData, setFormData] = useState({ name: '', phone: '', email: '', workHours: 0 });
 
-    const API_URL = `${API_BASE_URL}/api/workers`;
-
-    useEffect(() => { fetchWorkers(); }, []);
-
-    const fetchWorkers = async () => {
+    const fetchWorkers = useCallback(async () => {
         try {
             const res = await axios.get(API_URL);
             setWorkers(Array.isArray(res.data) ? res.data : []);
         } catch (err) { console.error("Error fetching:", err); }
-    };
+    }, []);
+
+    useEffect(() => { fetchWorkers(); }, [fetchWorkers]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -24,7 +24,7 @@ const Workers = () => {
             await axios.post(`${API_URL}/add`, formData);
             setFormData({ name: '', phone: '', email: '', workHours: 0 });
             fetchWorkers();
-        } catch (err) { alert("Error adding worker"); }
+        } catch { alert("Error adding worker"); }
     };
 
     const handleAddHour = async (id, currentHours) => {

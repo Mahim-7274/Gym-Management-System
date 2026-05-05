@@ -1,10 +1,11 @@
 const express = require('express');
 const Receipt = require('../models/Receipt');
+const { protect } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
 // Get recent receipts
-router.get('/', async (req, res) => {
+router.get('/', protect, async (req, res) => {
     try {
         const query = Receipt.find()
             .populate('memberId', 'name phone paymentStatus')

@@ -1,24 +1,24 @@
-import { useState, useEffect } from 'react';
-import { Search, Plus, Edit, Trash2, CheckCircle, User, QrCode, Download, Dumbbell } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Search, Plus, Edit, Trash2, CheckCircle, User, QrCode, Download, Dumbbell, RefreshCw } from 'lucide-react';
 import MemberFormModal from '../components/MemberFormModal';
 import ReceiptModal from '../components/ReceiptModal';
 import QRCodeModal from '../components/QRCodeModal';
-import { API_BASE_URL, fetchArray } from '../utils/api';
+import { API_BASE_URL, fetchArray, requestJson } from '../utils/api';
 
-const escapeCsvValue = (value) => {
-    const normalized = value === null || value === undefined ? '' : String(value);
-    return `"${normalized.replace(/"/g, '""')}"`;
+const formatDate = (date) => {
+    if (!date) return 'N/A';
+    const parsedDate = new Date(date);
+    return Number.isNaN(parsedDate.getTime()) ? 'N/A' : parsedDate.toLocaleDateString();
 };
 
-const downloadCsv = (filename, rows) => {
-    const csv = rows.map(row => row.map(escapeCsvValue).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
+const downloadXlsx = async (filename, sheetName, rows) => {
+    const XLSX = await import('xlsx');
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    worksheet['!cols'] = rows[0].map(header => ({ wch: Math.max(14, String(header).length + 2) }));
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    XLSX.writeFile(workbook, filename);
 };
 
 export default function Members() {
@@ -31,46 +31,45 @@ export default function Members() {
     const [selectedReceipt, setSelectedReceipt] = useState(null);
     const [editingMember, setEditingMember] = useState(null);
     const [qrMember, setQrMember] = useState(null);
+    const [exportError, setExportError] = useState('');
+    const [exportSuccess, setExportSuccess] = useState('');
 
-    const fetchMembers = async () => {
+    const fetchMembers = useCallback(async () => {
         const data = await fetchArray(`${API_BASE_URL}/api/members`);
         setMembers(data);
-    };
+    }, []);
 
-    const fetchPlans = async () => {
+    const fetchPlans = useCallback(async () => {
         const data = await fetchArray(`${API_BASE_URL}/api/plans`);
         setPlans(data);
-    };
+    }, []);
 
-    const fetchLatestWorkoutPlans = async () => {
+    const fetchLatestWorkoutPlans = useCallback(async () => {
         const data = await fetchArray(`${API_BASE_URL}/api/workout-plans/latest`);
         const planMap = data.reduce((acc, plan) => {
             acc[plan._id] = plan;
             return acc;
         }, {});
         setLatestWorkoutPlans(planMap);
-    };
+    }, []);
 
     useEffect(() => {
         fetchMembers();
         fetchPlans();
         fetchLatestWorkoutPlans();
-    }, []);
+    }, [fetchLatestWorkoutPlans, fetchMembers, fetchPlans]);
 
     // Fixed handleMarkAsPaid for instant UI update
     const handleMarkAsPaid = async (id) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/members/${id}`, {
+            await requestJson(`${API_BASE_URL}/api/members/${id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ paymentStatus: 'Paid' })
             });
 
-            if (res.ok) {
-                // Update the state immediately
-                setMembers(prev => prev.map(m => m._id === id ? { ...m, paymentStatus: 'Paid' } : m));
-                alert("Payment status updated to Paid!");
-            }
+            // Update the state immediately
+            setMembers(prev => prev.map(m => m._id === id ? { ...m, paymentStatus: 'Paid' } : m));
+            alert("Payment status updated to Paid!");
         } catch (err) {
             console.error('Error updating payment:', err);
         }
@@ -81,16 +80,14 @@ export default function Members() {
             const method = memberId ? 'PUT' : 'POST';
             const url = memberId ? `${API_BASE_URL}/api/members/${memberId}` : `${API_BASE_URL}/api/members`;
 
-            const res = await fetch(url, {
+            await requestJson(url, {
                 method,
                 body: formData
             });
 
-            if (res.ok) {
-                setShowMemberForm(false);
-                fetchMembers();
-                fetchLatestWorkoutPlans();
-            }
+            setShowMemberForm(false);
+            fetchMembers();
+            fetchLatestWorkoutPlans();
         } catch (err) {
             console.error('Error saving member:', err);
         }
@@ -99,71 +96,83 @@ export default function Members() {
     const handleDeleteMember = async (id) => {
         if (!window.confirm('Are you sure?')) return;
         try {
-            const res = await fetch(`${API_BASE_URL}/api/members/${id}`, { method: 'DELETE' });
-            if (res.ok) fetchMembers();
+            await requestJson(`${API_BASE_URL}/api/members/${id}`, { method: 'DELETE' });
+            fetchMembers();
         } catch (err) {
             console.error('Error deleting member:', err);
         }
     };
 
     const handleRenewPlan = async (member) => {
-        let planId = member.currentPlan?._id || (plans.length > 0 ? plans[0]._id : null);
+        const planId = member.currentPlan?._id || (plans.length > 0 ? plans[0]._id : null);
         if (!planId) return alert("No plans available!");
 
         try {
-            const res = await fetch(`${API_BASE_URL}/api/members/${member._id}/renew`, {
+            const data = await requestJson(`${API_BASE_URL}/api/members/${member._id}/renew`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ planId })
             });
-            if (res.ok) {
-                const data = await res.json();
-                setSelectedReceipt({
-                    memberName: data.member.name,
-                    planName: plans.find(p => p._id === planId)?.name || 'Plan',
-                    amount: data.receipt.amountPaid
-                });
-                setShowReceipt(true);
-                fetchMembers();
-            }
+            setSelectedReceipt({
+                memberName: data.member.name,
+                planName: plans.find(p => p._id === planId)?.name || 'Plan',
+                amount: data.receipt.amountPaid
+            });
+            setShowReceipt(true);
+            fetchMembers();
         } catch (err) {
             console.error('Error renewing plan:', err);
         }
     };
 
-    const handleExportMembers = () => {
-        const rows = [
-            ['Name', 'Phone', 'Status', 'Plan', 'Expiry Date', 'Payment Status'],
-            ...members.map(member => [
-                member.name,
-                member.phone,
-                member.status,
-                member.currentPlan?.name || 'N/A',
-                member.expiryDate ? new Date(member.expiryDate).toLocaleDateString() : 'N/A',
-                member.paymentStatus || 'Unpaid'
-            ])
-        ];
+    const handleExportMembers = async () => {
+        setExportError('');
+        setExportSuccess('');
 
-        downloadCsv('members.csv', rows);
+        try {
+            const rows = [
+                ['Name', 'Phone', 'Status', 'Plan', 'Expiry Date', 'Payment Status', 'Birthday', 'Latest Workout'],
+                ...members.map(member => [
+                    member.name,
+                    member.phone,
+                    member.status,
+                    member.currentPlan?.name || 'N/A',
+                    formatDate(member.expiryDate),
+                    member.paymentStatus || 'Unpaid',
+                    formatDate(member.dateOfBirth),
+                    latestWorkoutPlans[member._id]?.title || 'No plan'
+                ])
+            ];
+
+            await downloadXlsx('members.xlsx', 'Members', rows);
+            setExportSuccess(members.length ? 'Members exported.' : 'Members export created with headers only.');
+        } catch (err) {
+            console.error('Error exporting members:', err);
+            setExportError('Could not export members.');
+        }
     };
 
     const handleExportPayments = async () => {
+        setExportError('');
+        setExportSuccess('');
+
         try {
-            const receipts = await fetchArray(`${API_BASE_URL}/api/receipts?all=true`);
+            const receipts = await fetchArray(`${API_BASE_URL}/api/receipts?all=true`, { throwOnError: true });
             const rows = [
                 ['Member Name', 'Amount', 'Plan', 'Date', 'Payment Status'],
                 ...receipts.map(receipt => [
                     receipt.memberId?.name || 'Unknown Member',
                     receipt.amountPaid,
                     receipt.planId?.name || 'N/A',
-                    receipt.date ? new Date(receipt.date).toLocaleDateString() : 'N/A',
+                    formatDate(receipt.date),
                     receipt.memberId?.paymentStatus || 'Paid'
                 ])
             ];
 
-            downloadCsv('payments.csv', rows);
+            await downloadXlsx('payments.xlsx', 'Payments', rows);
+            setExportSuccess(receipts.length ? 'Payments exported.' : 'Payments export created with headers only.');
         } catch (err) {
             console.error('Error exporting payments:', err);
+            setExportError('Could not export payments.');
         }
     };
 
@@ -203,6 +212,12 @@ export default function Members() {
                     </button>
                 </div>
             </header>
+
+            {(exportError || exportSuccess) && (
+                <div style={exportError ? exportErrorStyle : exportSuccessStyle}>
+                    {exportError || exportSuccess}
+                </div>
+            )}
 
             <div className="glass-panel" style={{ padding: '0', overflowX: 'auto' }}>
                 <table style={{ width: '100%', minWidth: '1120px', borderCollapse: 'collapse' }}>
@@ -267,6 +282,7 @@ export default function Members() {
                                                 <CheckCircle size={14} /> Paid
                                             </button>
                                         )}
+                                        <button className="btn btn-secondary" onClick={() => handleRenewPlan(member)} title="Renew Plan"><RefreshCw size={14} /></button>
                                         <button className="btn btn-secondary" onClick={() => setQrMember(member)} title="Show QR Code"><QrCode size={14} /></button>
                                         <button className="btn btn-secondary" onClick={() => { setEditingMember(member); setShowMemberForm(true); }}><Edit size={14} /></button>
                                         <button className="btn btn-danger" onClick={() => handleDeleteMember(member._id)}><Trash2 size={14} /></button>
@@ -284,3 +300,21 @@ export default function Members() {
         </div>
     );
 }
+
+const exportErrorStyle = {
+    background: 'rgba(255, 51, 102, 0.12)',
+    color: 'var(--danger)',
+    border: '1px solid rgba(255, 51, 102, 0.25)',
+    borderRadius: '12px',
+    padding: '1rem',
+    marginBottom: '1.5rem'
+};
+
+const exportSuccessStyle = {
+    background: 'rgba(0, 255, 136, 0.12)',
+    color: 'var(--success)',
+    border: '1px solid rgba(0, 255, 136, 0.25)',
+    borderRadius: '12px',
+    padding: '1rem',
+    marginBottom: '1.5rem'
+};

@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dumbbell, Edit, Save, Trash2 } from 'lucide-react';
-import { API_BASE_URL, fetchArray } from '../utils/api';
+import { useAuth } from '../context/useAuth';
+import { API_BASE_URL, fetchArray, requestJson } from '../utils/api';
 
 const API_URL = `${API_BASE_URL}/api/workout-plans`;
 
 export default function WorkoutPlans() {
+    const { user } = useAuth();
+    const canManagePlans = ['admin', 'trainer', 'staff'].includes(user?.role);
     const [members, setMembers] = useState([]);
     const [plans, setPlans] = useState([]);
     const [selectedMemberId, setSelectedMemberId] = useState('');
@@ -23,17 +26,28 @@ export default function WorkoutPlans() {
         [members, selectedMemberId]
     );
 
-    const fetchMembers = async () => {
-        const data = await fetchArray(`${API_BASE_URL}/api/members`);
+    const resetForm = useCallback(() => {
+        setEditingPlanId(null);
+        setFormData({
+            title: 'Workout Plan',
+            assignedTrainer: '',
+            dailyExercises: '',
+            notes: ''
+        });
+    }, []);
+
+    const fetchMembers = useCallback(async () => {
+        const data = await fetchArray(`${API_BASE_URL}/api/members`, { throwOnError: true });
         setMembers(data);
-        if (!selectedMemberId && data.length > 0) {
-            setSelectedMemberId(data[0]._id);
-        } else if (data.length === 0) {
+        setSelectedMemberId(currentId => (
+            data.some(member => member._id === currentId) ? currentId : data[0]?._id || ''
+        ));
+        if (data.length === 0) {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const fetchPlans = async (memberId = selectedMemberId) => {
+    const fetchPlans = useCallback(async (memberId) => {
         if (!memberId) {
             setPlans([]);
             setLoading(false);
@@ -42,43 +56,34 @@ export default function WorkoutPlans() {
 
         try {
             setLoading(true);
-            const data = await fetchArray(`${API_URL}/member/${memberId}`);
+            const data = await fetchArray(`${API_URL}/member/${memberId}`, { throwOnError: true });
             setPlans(data);
             setError('');
-        } catch (err) {
+        } catch {
             setError('Could not load workout plans.');
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchMembers().catch(() => {
             setError('Could not load members.');
             setLoading(false);
         });
-    }, []);
+    }, [fetchMembers]);
 
     useEffect(() => {
         fetchPlans(selectedMemberId);
         resetForm();
-    }, [selectedMemberId]);
-
-    const resetForm = () => {
-        setEditingPlanId(null);
-        setFormData({
-            title: 'Workout Plan',
-            assignedTrainer: '',
-            dailyExercises: '',
-            notes: ''
-        });
-    };
+    }, [fetchPlans, resetForm, selectedMemberId]);
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
     const handleEdit = (plan) => {
+        if (!canManagePlans) return;
         setEditingPlanId(plan._id);
         setFormData({
             title: plan.title || 'Workout Plan',
@@ -95,21 +100,23 @@ export default function WorkoutPlans() {
             setError('Please select a member first.');
             return;
         }
+        if (!canManagePlans) {
+            setError('You do not have permission to manage workout plans.');
+            return;
+        }
+        if (!formData.dailyExercises.trim()) {
+            setError('Please add at least one daily exercise.');
+            return;
+        }
 
         try {
-            const res = await fetch(editingPlanId ? `${API_URL}/${editingPlanId}` : API_URL, {
+            await requestJson(editingPlanId ? `${API_URL}/${editingPlanId}` : API_URL, {
                 method: editingPlanId ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...formData, memberId: selectedMemberId })
             });
 
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.error || 'Could not save workout plan.');
-            }
-
             resetForm();
-            fetchPlans(selectedMemberId);
+            await fetchPlans(selectedMemberId);
         } catch (err) {
             setError(err.message);
         }
@@ -119,13 +126,11 @@ export default function WorkoutPlans() {
         if (!window.confirm('Delete this workout plan?')) return;
 
         try {
-            const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                fetchPlans(selectedMemberId);
-                if (editingPlanId === id) resetForm();
-            }
+            await requestJson(`${API_URL}/${id}`, { method: 'DELETE' });
+            await fetchPlans(selectedMemberId);
+            if (editingPlanId === id) resetForm();
         } catch (err) {
-            setError('Could not delete workout plan.');
+            setError(err.message || 'Could not delete workout plan.');
         }
     };
 
@@ -142,7 +147,8 @@ export default function WorkoutPlans() {
                 </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 420px) 1fr', gap: '2rem', alignItems: 'start' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: canManagePlans ? 'minmax(320px, 420px) 1fr' : '1fr', gap: '2rem', alignItems: 'start' }}>
+                {canManagePlans && (
                 <div className="glass-panel" style={{ padding: '2rem' }}>
                     <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <Dumbbell size={20} color="var(--accent-primary)" />
@@ -188,6 +194,7 @@ export default function WorkoutPlans() {
                         </div>
                     </form>
                 </div>
+                )}
 
                 <div>
                     <div style={{ marginBottom: '1rem' }}>
@@ -210,10 +217,12 @@ export default function WorkoutPlans() {
                                                 Trainer: {plan.assignedTrainer || 'Not assigned'} | Updated {new Date(plan.updatedAt).toLocaleDateString()}
                                             </p>
                                         </div>
-                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                            <button className="btn btn-secondary" onClick={() => handleEdit(plan)}><Edit size={16} /></button>
-                                            <button className="btn btn-danger" onClick={() => handleDelete(plan._id)}><Trash2 size={16} /></button>
-                                        </div>
+                                        {canManagePlans && (
+                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                <button className="btn btn-secondary" onClick={() => handleEdit(plan)}><Edit size={16} /></button>
+                                                <button className="btn btn-danger" onClick={() => handleDelete(plan._id)}><Trash2 size={16} /></button>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <pre style={preStyle}>{plan.dailyExercises}</pre>

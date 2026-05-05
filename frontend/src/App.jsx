@@ -3,7 +3,8 @@ import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react
 import { LayoutDashboard, Users, CreditCard, Settings, Briefcase, TrendingUp, Wrench, Bell, LogOut, Dumbbell, MessageSquare, CalendarDays } from 'lucide-react'; 
 import './index.css';
 
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './context/useAuth';
 import Login from './pages/Login';
 
 import Dashboard from './pages/Dashboard';
