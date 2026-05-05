@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Activity, Users, CheckCircle, AlertCircle, AlertTriangle, Wrench, TrendingUp } from 'lucide-react';
+import { Activity, Users, CheckCircle, AlertCircle, AlertTriangle, Wrench, TrendingUp, Cake } from 'lucide-react';
 import CheckInModal from '../components/CheckInModal';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { API_BASE_URL, fetchArray } from '../utils/api';
 
 export default function Dashboard() {
     const [stats, setStats] = useState({ todayCheckins: 0, activeMembers: 0, gymCapacity: 0 });
     const [recentCheckins, setRecentCheckins] = useState([]);
     const [unpaidMembers, setUnpaidMembers] = useState([]); 
     const [brokenMachines, setBrokenMachines] = useState([]); 
+    const [birthdayMembers, setBirthdayMembers] = useState([]);
     const [showCheckInModal, setShowCheckInModal] = useState(false);
     const [revenueData, setRevenueData] = useState([]);
     const [newMembersData, setNewMembersData] = useState([]);
@@ -16,31 +18,28 @@ export default function Dashboard() {
 
     const fetchDashboardData = async () => {
         try {
-            // 1. Fetch today's checkins
-            const checkinsRes = await fetch('http://localhost:5000/api/checkins/today');
-            const checkinsData = await checkinsRes.json();
+            const [
+                checkinsData,
+                membersData,
+                unpaidData,
+                machinesData,
+                birthdaysData,
+                revenueJson,
+                newMembersJson
+            ] = await Promise.all([
+                fetchArray(`${API_BASE_URL}/api/checkins/today`),
+                fetchArray(`${API_BASE_URL}/api/members`),
+                fetchArray(`${API_BASE_URL}/api/members/unpaid`),
+                fetchArray(`${API_BASE_URL}/api/machines/broken`),
+                fetchArray(`${API_BASE_URL}/api/members/birthdays/today`),
+                fetchArray(`${API_BASE_URL}/api/analytics/revenue`),
+                fetchArray(`${API_BASE_URL}/api/analytics/new-members`)
+            ]);
 
-            // 2. Fetch all members to count active ones
-            const membersRes = await fetch('http://localhost:5000/api/members');
-            const membersData = await membersRes.json();
-
-            // 3. Fetch unpaid members
-            const unpaidRes = await fetch('http://localhost:5000/api/members/unpaid');
-            const unpaidData = await unpaidRes.json();
             setUnpaidMembers(unpaidData);
-
-            // 4. Fetch broken machines
-            const machinesRes = await fetch('http://localhost:5000/api/machines/broken');
-            const machinesData = await machinesRes.json();
             setBrokenMachines(machinesData);
-
-            // 5. Fetch analytics
-            const revenueRes = await fetch('http://localhost:5000/api/analytics/revenue');
-            const revenueJson = await revenueRes.json();
+            setBirthdayMembers(birthdaysData);
             setRevenueData(revenueJson);
-
-            const newMembersRes = await fetch('http://localhost:5000/api/analytics/new-members');
-            const newMembersJson = await newMembersRes.json();
             setNewMembersData(newMembersJson);
 
             const activeCount = membersData.filter(m => m.status === 'Active').length;
@@ -88,6 +87,29 @@ export default function Dashboard() {
                     <CheckCircle size={18} /> Quick Check-in
                 </button>
             </header>
+
+            {/* --- BIRTHDAY REMINDERS --- */}
+            <div style={birthdayContainerStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: birthdayMembers.length ? '1rem' : 0 }}>
+                    <Cake color="var(--accent-primary)" size={26} />
+                    <div>
+                        <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Birthday Reminders</h3>
+                        <p style={{ margin: 0, fontSize: '0.9rem' }}>
+                            {birthdayMembers.length ? `${birthdayMembers.length} member(s) have birthdays today.` : 'No birthdays today'}
+                        </p>
+                    </div>
+                </div>
+
+                {birthdayMembers.length > 0 && (
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        {birthdayMembers.map(member => (
+                            <span key={member._id} style={birthdayTagStyle}>
+                                {member.name} {member.phone ? `- ${member.phone}` : ''}
+                            </span>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             {/* --- MACHINE UPKEEP ALERT --- */}
             {brokenMachines.length > 0 && (
@@ -269,4 +291,21 @@ const alertCardStyle = {
     display: 'flex',
     flexDirection: 'column',
     gap: '2px'
+};
+
+const birthdayContainerStyle = {
+    background: 'rgba(0, 240, 255, 0.08)',
+    border: '1px solid rgba(0, 240, 255, 0.22)',
+    padding: '1.2rem',
+    borderRadius: '12px',
+    marginBottom: '1.5rem'
+};
+
+const birthdayTagStyle = {
+    background: 'rgba(0, 240, 255, 0.14)',
+    color: 'var(--text-primary)',
+    padding: '6px 12px',
+    borderRadius: '8px',
+    fontSize: '0.9rem',
+    border: '1px solid rgba(0, 240, 255, 0.18)'
 };

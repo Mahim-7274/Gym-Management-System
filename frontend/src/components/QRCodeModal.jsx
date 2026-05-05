@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, Download, User } from 'lucide-react';
+import { API_BASE_URL } from '../utils/api';
 
 export default function QRCodeModal({ member, onClose }) {
     const qrRef = useRef(null);
@@ -46,7 +47,7 @@ export default function QRCodeModal({ member, onClose }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', justifyContent: 'center', marginBottom: '2rem' }}>
                     {member.profilePicture ? (
                         <img 
-                            src={`http://localhost:5000${member.profilePicture}`}
+                            src={`${API_BASE_URL}${member.profilePicture}`}
                             alt={member.name}
                             style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.1)' }}
                         />

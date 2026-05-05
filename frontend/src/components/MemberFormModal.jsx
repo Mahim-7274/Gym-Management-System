@@ -1,31 +1,35 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Save, Camera, User } from 'lucide-react';
+import { API_BASE_URL, fetchArray } from '../utils/api';
+
+const formatDateForInput = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().slice(0, 10);
+};
 
 export default function MemberFormModal({ onClose, onSave, initialData = null }) {
     const [plans, setPlans] = useState([]);
     const [formData, setFormData] = useState({
         name: initialData?.name || '',
         phone: initialData?.phone || '',
+        dateOfBirth: formatDateForInput(initialData?.dateOfBirth),
         emergencyContactName: initialData?.emergencyContactName || '',
         emergencyContactPhone: initialData?.emergencyContactPhone || '',
         healthNotes: initialData?.healthNotes || '',
         planId: initialData?.currentPlan?._id || ''
     });
     const [selectedFile, setSelectedFile] = useState(null);
-    const [preview, setPreview] = useState(initialData?.profilePicture ? `http://localhost:5000${initialData.profilePicture}` : null);
+    const [preview, setPreview] = useState(initialData?.profilePicture ? `${API_BASE_URL}${initialData.profilePicture}` : null);
     const fileInputRef = useRef(null);
 
     useEffect(() => {
         const fetchPlans = async () => {
-            try {
-                const res = await fetch('http://localhost:5000/api/plans');
-                const data = await res.json();
-                setPlans(data);
-                if (!formData.planId && data.length > 0 && !initialData) {
-                    setFormData(prev => ({ ...prev, planId: data[0]._id }));
-                }
-            } catch (err) {
-                console.error('Error fetching plans:', err);
+            const data = await fetchArray(`${API_BASE_URL}/api/plans`);
+            setPlans(data);
+            if (!formData.planId && data.length > 0 && !initialData) {
+                setFormData(prev => ({ ...prev, planId: data[0]._id }));
             }
         };
         fetchPlans();
@@ -49,6 +53,7 @@ export default function MemberFormModal({ onClose, onSave, initialData = null })
         const data = new FormData();
         data.append('name', formData.name);
         data.append('phone', formData.phone);
+        data.append('dateOfBirth', formData.dateOfBirth || '');
         if (formData.emergencyContactName) data.append('emergencyContactName', formData.emergencyContactName);
         if (formData.emergencyContactPhone) data.append('emergencyContactPhone', formData.emergencyContactPhone);
         if (formData.healthNotes) data.append('healthNotes', formData.healthNotes);
@@ -121,6 +126,11 @@ export default function MemberFormModal({ onClose, onSave, initialData = null })
                         <div className="form-group">
                             <label>Phone Number</label>
                             <input type="tel" className="form-control" name="phone" value={formData.phone} onChange={handleChange} required placeholder="+1 234 567 8900" />
+                        </div>
+
+                        <div className="form-group">
+                            <label>Date of Birth</label>
+                            <input type="date" className="form-control" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleChange} />
                         </div>
 
                         <div className="form-group">

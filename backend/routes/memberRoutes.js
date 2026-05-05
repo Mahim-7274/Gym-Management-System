@@ -6,6 +6,28 @@ const upload = require('../config/upload');
 
 const router = express.Router();
 
+// Get members whose birthday is today. Month/day only, year ignored.
+router.get('/birthdays/today', async (req, res) => {
+    try {
+        const today = new Date();
+        const todayMonth = today.getMonth();
+        const todayDate = today.getDate();
+
+        const members = await Member.find({
+            dateOfBirth: { $exists: true, $ne: null }
+        }).populate('currentPlan');
+
+        const birthdayMembers = members.filter((member) => {
+            const birthDate = new Date(member.dateOfBirth);
+            return birthDate.getMonth() === todayMonth && birthDate.getDate() === todayDate;
+        });
+
+        res.json(birthdayMembers);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 /**
  * FEATURE 9: Get members with unpaid balances
  * Always placed above generic ID routes
@@ -44,6 +66,9 @@ router.put('/:id', upload.single('profilePicture'), async (req, res) => {
         }
 
         const updates = req.body;
+        if (updates.dateOfBirth === '') {
+            updates.dateOfBirth = null;
+        }
         if (req.file) {
             updates.profilePicture = `/uploads/profiles/${req.file.filename}`;
         }
@@ -66,6 +91,9 @@ router.put('/:id', upload.single('profilePicture'), async (req, res) => {
 router.post('/', upload.single('profilePicture'), async (req, res) => {
     try {
         const memberData = req.body;
+        if (memberData.dateOfBirth === '') {
+            delete memberData.dateOfBirth;
+        }
         if (req.file) {
             memberData.profilePicture = `/uploads/profiles/${req.file.filename}`;
         }

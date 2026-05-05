@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from '../utils/api';
 
 const ProgressTracker = () => {
     const [logs, setLogs] = useState([]);
     const [memberId, setMemberId] = useState(""); 
     const [formData, setFormData] = useState({ weight: '', chest: '', waist: '' });
 
-    const API_URL = "http://localhost:5000/api/progress";
+    const API_URL = `${API_BASE_URL}/api/progress`;
 
     const fetchHistory = async () => {
         const cleanId = memberId.trim();
         if (!cleanId || cleanId.length < 5) return; 
         try {
             const res = await axios.get(`${API_URL}/${cleanId}`);
-            setLogs(res.data);
+            setLogs(Array.isArray(res.data) ? res.data : []);
         } catch (err) { 
             console.error("Error fetching history", err); 
         }

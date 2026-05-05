@@ -1,19 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import PlanFormModal from '../components/PlanFormModal';
+import { API_BASE_URL, fetchArray } from '../utils/api';
 
 export default function Plans() {
     const [plans, setPlans] = useState([]);
     const [showModal, setShowModal] = useState(false);
 
     const fetchPlans = async () => {
-        try {
-            const res = await fetch('http://localhost:5000/api/plans');
-            const data = await res.json();
-            setPlans(data);
-        } catch (err) {
-            console.error('Error fetching plans:', err);
-        }
+        const data = await fetchArray(`${API_BASE_URL}/api/plans`);
+        setPlans(data);
     };
 
     useEffect(() => {
@@ -22,7 +18,7 @@ export default function Plans() {
 
     const handleSavePlan = async (planData) => {
         try {
-            const res = await fetch('http://localhost:5000/api/plans', {
+            const res = await fetch(`${API_BASE_URL}/api/plans`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(planData)
@@ -39,7 +35,7 @@ export default function Plans() {
     const handleDeletePlan = async (id) => {
         if (!window.confirm('Are you sure you want to delete this plan?')) return;
         try {
-            const res = await fetch(`http://localhost:5000/api/plans/${id}`, {
+            const res = await fetch(`${API_BASE_URL}/api/plans/${id}`, {
                 method: 'DELETE'
             });
             if (res.ok) {
