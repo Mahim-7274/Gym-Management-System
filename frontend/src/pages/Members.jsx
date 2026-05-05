@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, RefreshCw, Edit, Trash2, CheckCircle } from 'lucide-react';
+import { Search, Plus, RefreshCw, Edit, Trash2, CheckCircle, User, QrCode } from 'lucide-react';
 import MemberFormModal from '../components/MemberFormModal';
 import ReceiptModal from '../components/ReceiptModal';
+import QRCodeModal from '../components/QRCodeModal';
 
 export default function Members() {
     const [members, setMembers] = useState([]);
@@ -11,6 +12,7 @@ export default function Members() {
     const [showReceipt, setShowReceipt] = useState(false);
     const [selectedReceipt, setSelectedReceipt] = useState(null);
     const [editingMember, setEditingMember] = useState(null);
+    const [qrMember, setQrMember] = useState(null);
 
     const fetchMembers = async () => {
         try {
@@ -56,17 +58,14 @@ export default function Members() {
         }
     };
 
-    const handleSaveMember = async (memberData) => {
+    const handleSaveMember = async (formData, memberId) => {
         try {
-            const method = memberData._id ? 'PUT' : 'POST';
-            const url = memberData._id ? `http://localhost:5000/api/members/${memberData._id}` : 'http://localhost:5000/api/members';
-            const payload = { ...memberData };
-            if (payload.planId) payload.currentPlan = payload.planId;
+            const method = memberId ? 'PUT' : 'POST';
+            const url = memberId ? `http://localhost:5000/api/members/${memberId}` : 'http://localhost:5000/api/members';
 
             const res = await fetch(url, {
                 method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: formData
             });
 
             if (res.ok) {
@@ -146,7 +145,7 @@ export default function Members() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                         <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)' }}>
-                            <th style={{ padding: '1.2rem' }}>Name</th>
+                            <th style={{ padding: '1.2rem' }}>Member</th>
                             <th style={{ padding: '1.2rem' }}>Phone</th>
                             <th style={{ padding: '1.2rem' }}>Status</th>
                             <th style={{ padding: '1.2rem' }}>Payment</th>
@@ -160,7 +159,20 @@ export default function Members() {
                             const isUnpaid = member.paymentStatus !== 'Paid';
                             return (
                                 <tr key={member._id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <td style={{ padding: '1.2rem' }}>{member.name}</td>
+                                    <td style={{ padding: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                                        {member.profilePicture ? (
+                                            <img 
+                                                src={`http://localhost:5000${member.profilePicture}`} 
+                                                alt={member.name}
+                                                style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(255,255,255,0.1)' }}
+                                            />
+                                        ) : (
+                                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <User size={18} color="rgba(255,255,255,0.4)" />
+                                            </div>
+                                        )}
+                                        {member.name}
+                                    </td>
                                     <td style={{ padding: '1.2rem' }}>{member.phone}</td>
                                     <td style={{ padding: '1.2rem' }}>
                                         <span className={`badge ${member.status === 'Active' ? 'badge-active' : 'badge-expired'}`}>{member.status}</span>
@@ -178,6 +190,7 @@ export default function Members() {
                                                 <CheckCircle size={14} /> Paid
                                             </button>
                                         )}
+                                        <button className="btn btn-secondary" onClick={() => setQrMember(member)} title="Show QR Code"><QrCode size={14} /></button>
                                         <button className="btn btn-secondary" onClick={() => { setEditingMember(member); setShowMemberForm(true); }}><Edit size={14} /></button>
                                         <button className="btn btn-danger" onClick={() => handleDeleteMember(member._id)}><Trash2 size={14} /></button>
                                     </td>
@@ -190,6 +203,7 @@ export default function Members() {
 
             {showMemberForm && <MemberFormModal initialData={editingMember} onClose={() => setShowMemberForm(false)} onSave={handleSaveMember} />}
             {showReceipt && selectedReceipt && <ReceiptModal receipt={selectedReceipt} onClose={() => setShowReceipt(false)} />}
+            {qrMember && <QRCodeModal member={qrMember} onClose={() => setQrMember(null)} />}
         </div>
     );
 }

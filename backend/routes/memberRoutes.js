@@ -2,6 +2,7 @@ const express = require('express');
 const Member = require('../models/Member');
 const Plan = require('../models/Plan');
 const Receipt = require('../models/Receipt');
+const upload = require('../config/upload');
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ router.get('/', async (req, res) => {
  * UPDATED PUT ROUTE: Uses .save() for "Aggressive Saving"
  * This ensures paymentStatus: 'Paid' actually sticks in the DB.
  */
-router.put('/:id', async (req, res) => {
+router.put('/:id', upload.single('profilePicture'), async (req, res) => {
     try {
         const member = await Member.findById(req.params.id);
         
@@ -42,8 +43,13 @@ router.put('/:id', async (req, res) => {
             return res.status(404).json({ error: 'Member not found' });
         }
 
+        const updates = req.body;
+        if (req.file) {
+            updates.profilePicture = `/uploads/profiles/${req.file.filename}`;
+        }
+
         // Merge the incoming updates (like paymentStatus) into the member object
-        Object.assign(member, req.body);
+        Object.assign(member, updates);
 
         // .save() is more reliable than findByIdAndUpdate for new schema fields
         const updatedMember = await member.save();
@@ -57,9 +63,13 @@ router.put('/:id', async (req, res) => {
 });
 
 // Create a new member
-router.post('/', async (req, res) => {
+router.post('/', upload.single('profilePicture'), async (req, res) => {
     try {
-        const newMember = new Member(req.body);
+        const memberData = req.body;
+        if (req.file) {
+            memberData.profilePicture = `/uploads/profiles/${req.file.filename}`;
+        }
+        const newMember = new Member(memberData);
         await newMember.save();
         res.status(201).json(newMember);
     } catch (err) {

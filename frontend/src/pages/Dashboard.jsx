@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Activity, Users, CheckCircle, AlertCircle, AlertTriangle, Wrench } from 'lucide-react';
+import { Activity, Users, CheckCircle, AlertCircle, AlertTriangle, Wrench, TrendingUp } from 'lucide-react';
 import CheckInModal from '../components/CheckInModal';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function Dashboard() {
     const [stats, setStats] = useState({ todayCheckins: 0, activeMembers: 0, gymCapacity: 0 });
@@ -8,6 +9,8 @@ export default function Dashboard() {
     const [unpaidMembers, setUnpaidMembers] = useState([]); 
     const [brokenMachines, setBrokenMachines] = useState([]); 
     const [showCheckInModal, setShowCheckInModal] = useState(false);
+    const [revenueData, setRevenueData] = useState([]);
+    const [newMembersData, setNewMembersData] = useState([]);
 
     const MAX_CAPACITY = 100;
 
@@ -30,6 +33,15 @@ export default function Dashboard() {
             const machinesRes = await fetch('http://localhost:5000/api/machines/broken');
             const machinesData = await machinesRes.json();
             setBrokenMachines(machinesData);
+
+            // 5. Fetch analytics
+            const revenueRes = await fetch('http://localhost:5000/api/analytics/revenue');
+            const revenueJson = await revenueRes.json();
+            setRevenueData(revenueJson);
+
+            const newMembersRes = await fetch('http://localhost:5000/api/analytics/new-members');
+            const newMembersJson = await newMembersRes.json();
+            setNewMembersData(newMembersJson);
 
             const activeCount = membersData.filter(m => m.status === 'Active').length;
 
@@ -135,6 +147,51 @@ export default function Dashboard() {
                     <div>
                         <h3 style={{ fontSize: '2rem', margin: 0 }}>{stats.activeMembers}</h3>
                         <p>Total Active Members</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* --- ANALYTICS CHARTS --- */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
+                <div className="glass-panel" style={{ padding: '2rem' }}>
+                    <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <TrendingUp color="var(--primary)" size={20} />
+                        Total Money Made (Last 30 Days)
+                    </h3>
+                    <div style={{ height: '300px', width: '100%' }}>
+                        <ResponsiveContainer>
+                            <BarChart data={revenueData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                                <XAxis dataKey="date" stroke="rgba(255,255,255,0.5)" fontSize={12} tickMargin={10} />
+                                <YAxis stroke="rgba(255,255,255,0.5)" fontSize={12} />
+                                <Tooltip 
+                                    contentStyle={{ backgroundColor: 'rgba(20,20,25,0.9)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} 
+                                    itemStyle={{ color: '#fff' }}
+                                />
+                                <Bar dataKey="revenue" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                <div className="glass-panel" style={{ padding: '2rem' }}>
+                    <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <Users color="var(--success)" size={20} />
+                        New Members (Last 30 Days)
+                    </h3>
+                    <div style={{ height: '300px', width: '100%' }}>
+                        <ResponsiveContainer>
+                            <LineChart data={newMembersData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                                <XAxis dataKey="date" stroke="rgba(255,255,255,0.5)" fontSize={12} tickMargin={10} />
+                                <YAxis stroke="rgba(255,255,255,0.5)" fontSize={12} />
+                                <Tooltip 
+                                    contentStyle={{ backgroundColor: 'rgba(20,20,25,0.9)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} 
+                                    itemStyle={{ color: '#fff' }}
+                                />
+                                <Line type="monotone" dataKey="newMembers" stroke="var(--success)" strokeWidth={3} dot={{ r: 4, fill: "var(--success)" }} />
+                            </LineChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
             </div>

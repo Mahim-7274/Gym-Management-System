@@ -35,6 +35,10 @@ const memberSchema = new mongoose.Schema({
     joinDate: {
         type: Date,
         default: Date.now
+    },
+    profilePicture: {
+        type: String,
+        required: false
     }
 }, { 
     timestamps: true // This automatically adds createdAt and updatedAt fields

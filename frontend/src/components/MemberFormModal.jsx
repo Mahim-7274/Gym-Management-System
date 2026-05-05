@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, Save } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Save, Camera, User } from 'lucide-react';
 
 export default function MemberFormModal({ onClose, onSave, initialData = null }) {
     const [plans, setPlans] = useState([]);
@@ -11,6 +11,9 @@ export default function MemberFormModal({ onClose, onSave, initialData = null })
         healthNotes: initialData?.healthNotes || '',
         planId: initialData?.currentPlan?._id || ''
     });
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [preview, setPreview] = useState(initialData?.profilePicture ? `http://localhost:5000${initialData.profilePicture}` : null);
+    const fileInputRef = useRef(null);
 
     useEffect(() => {
         const fetchPlans = async () => {
@@ -32,9 +35,32 @@ export default function MemberFormModal({ onClose, onSave, initialData = null })
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setSelectedFile(file);
+            setPreview(URL.createObjectURL(file));
+        }
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
-        onSave({ ...formData, _id: initialData?._id });
+        
+        const data = new FormData();
+        data.append('name', formData.name);
+        data.append('phone', formData.phone);
+        if (formData.emergencyContactName) data.append('emergencyContactName', formData.emergencyContactName);
+        if (formData.emergencyContactPhone) data.append('emergencyContactPhone', formData.emergencyContactPhone);
+        if (formData.healthNotes) data.append('healthNotes', formData.healthNotes);
+        if (formData.planId) {
+            data.append('planId', formData.planId);
+            data.append('currentPlan', formData.planId);
+        }
+        if (selectedFile) {
+            data.append('profilePicture', selectedFile);
+        }
+
+        onSave(data, initialData?._id);
     };
 
     return (
@@ -53,6 +79,39 @@ export default function MemberFormModal({ onClose, onSave, initialData = null })
                 </h2>
 
                 <form onSubmit={handleSubmit}>
+                    {/* Profile Picture Upload */}
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
+                        <div 
+                            onClick={() => fileInputRef.current.click()}
+                            style={{ 
+                                width: '100px', height: '100px', borderRadius: '50%', 
+                                border: '2px dashed rgba(255,255,255,0.3)', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                overflow: 'hidden', position: 'relative',
+                                background: 'rgba(255,255,255,0.05)'
+                            }}
+                        >
+                            {preview ? (
+                                <img src={preview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                                <User size={40} color="rgba(255,255,255,0.3)" />
+                            )}
+                            <div style={{ 
+                                position: 'absolute', bottom: '0', left: '0', right: '0', 
+                                background: 'rgba(0,0,0,0.6)', padding: '4px', textAlign: 'center'
+                            }}>
+                                <Camera size={14} />
+                            </div>
+                        </div>
+                        <input 
+                            ref={fileInputRef}
+                            type="file" 
+                            accept="image/*" 
+                            onChange={handleFileChange} 
+                            style={{ display: 'none' }} 
+                        />
+                    </div>
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
                         <div className="form-group">
                             <label>Full Name</label>
