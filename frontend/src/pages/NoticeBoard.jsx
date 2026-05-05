@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Bell, PlusCircle, Trash2, Calendar } from 'lucide-react';
+import { API_BASE_URL, fetchArray } from '../utils/api';
 
 export default function NoticeBoard() {
     const [notices, setNotices] = useState([]);
@@ -8,13 +9,8 @@ export default function NoticeBoard() {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const fetchNotices = async () => {
-        try {
-            const res = await fetch('http://localhost:5000/api/notices');
-            const data = await res.json();
-            setNotices(data);
-        } catch (err) {
-            console.error('Error fetching notices:', err);
-        }
+        const data = await fetchArray(`${API_BASE_URL}/api/notices`);
+        setNotices(data);
     };
 
     useEffect(() => {
@@ -27,7 +23,7 @@ export default function NoticeBoard() {
 
         setIsSubmitting(true);
         try {
-            const res = await fetch('http://localhost:5000/api/notices', {
+            const res = await fetch(`${API_BASE_URL}/api/notices`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title, content })
@@ -51,7 +47,7 @@ export default function NoticeBoard() {
         if (!window.confirm('Are you sure you want to delete this notice?')) return;
 
         try {
-            const res = await fetch(`http://localhost:5000/api/notices/${id}`, {
+            const res = await fetch(`${API_BASE_URL}/api/notices/${id}`, {
                 method: 'DELETE'
             });
 

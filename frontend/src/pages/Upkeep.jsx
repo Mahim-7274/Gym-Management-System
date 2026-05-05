@@ -1,17 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Wrench, Plus, CheckCircle, AlertTriangle } from 'lucide-react';
+import { API_BASE_URL, fetchArray } from '../utils/api';
 
 export default function Upkeep() {
     const [machines, setMachines] = useState([]);
 
     const fetchMachines = async () => {
-        try {
-            const res = await fetch('http://localhost:5000/api/machines');
-            const data = await res.json();
-            setMachines(data);
-        } catch (err) {
-            console.error("Error fetching machines:", err);
-        }
+        const data = await fetchArray(`${API_BASE_URL}/api/machines`);
+        setMachines(data);
     };
 
     useEffect(() => { fetchMachines(); }, []);
@@ -24,7 +20,7 @@ export default function Upkeep() {
         }
 
         try {
-            const res = await fetch(`http://localhost:5000/api/machines/${id}`, {
+            const res = await fetch(`${API_BASE_URL}/api/machines/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: newStatus, note: note || "All good." })
@@ -39,7 +35,7 @@ export default function Upkeep() {
         const name = prompt("Enter Machine Name (e.g., Treadmill 05):");
         if (!name) return;
 
-        await fetch('http://localhost:5000/api/machines', {
+        await fetch(`${API_BASE_URL}/api/machines`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, status: 'Functional' })

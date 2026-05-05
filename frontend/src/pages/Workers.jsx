@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from '../utils/api';
 
 const Workers = () => {
     const [workers, setWorkers] = useState([]);
     const [searchTerm, setSearchTerm] = useState(""); // NEW: For the search bar
     const [formData, setFormData] = useState({ name: '', phone: '', email: '', workHours: 0 });
 
-    const API_URL = "http://localhost:5000/api/workers";
+    const API_URL = `${API_BASE_URL}/api/workers`;
 
     useEffect(() => { fetchWorkers(); }, []);
 
     const fetchWorkers = async () => {
         try {
             const res = await axios.get(API_URL);
-            setWorkers(res.data);
+            setWorkers(Array.isArray(res.data) ? res.data : []);
         } catch (err) { console.error("Error fetching:", err); }
     };
 

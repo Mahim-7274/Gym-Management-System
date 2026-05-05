@@ -11,6 +11,25 @@ const memberSchema = new mongoose.Schema({
         required: [true, 'Please provide a phone number'],
         trim: true
     },
+    dateOfBirth: {
+        type: Date,
+        required: false
+    },
+    emergencyContactName: {
+        type: String,
+        trim: true,
+        required: false
+    },
+    emergencyContactPhone: {
+        type: String,
+        trim: true,
+        required: false
+    },
+    healthNotes: {
+        type: String,
+        trim: true,
+        required: false
+    },
     status: {
         type: String,
         enum: ['Active', 'Expired', 'Inactive'],

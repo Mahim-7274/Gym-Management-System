@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Check } from 'lucide-react';
+import { API_BASE_URL, fetchArray } from '../utils/api';
 
 export default function CheckInModal({ onClose, onCheckIn }) {
     const [searchTerm, setSearchTerm] = useState('');
@@ -9,14 +10,9 @@ export default function CheckInModal({ onClose, onCheckIn }) {
 
     useEffect(() => {
         const fetchMembers = async () => {
-            try {
-                const res = await fetch('http://localhost:5000/api/members');
-                const data = await res.json();
-                // Filter only active members for check-in
-                setMembers(data.filter(m => m.status === 'Active'));
-            } catch (err) {
-                console.error('Error fetching members for checkin:', err);
-            }
+            const data = await fetchArray(`${API_BASE_URL}/api/members`);
+            // Filter only active members for check-in
+            setMembers(data.filter(m => m.status === 'Active'));
         };
         fetchMembers();
     }, []);
@@ -30,7 +26,7 @@ export default function CheckInModal({ onClose, onCheckIn }) {
         setLoading(true);
         setErrorMsg('');
         try {
-            const res = await fetch('http://localhost:5000/api/checkins', {
+            const res = await fetch(`${API_BASE_URL}/api/checkins`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ memberId })

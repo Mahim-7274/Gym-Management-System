@@ -1,73 +1,131 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_key';
+const DEMO_PASSWORD = 'password123';
+const DEMO_USERS = [
+    { username: 'admin', password: DEMO_PASSWORD, role: 'admin' },
+    { username: 'staff', password: DEMO_PASSWORD, role: 'staff' }
+];
 
-// Initialize default users (Run once on startup to ensure we can log in)
+const normalizeUsername = (username) => String(username || '').trim().toLowerCase();
+
+const isDemoFallbackEnabled = () => (
+    process.env.NODE_ENV !== 'production' &&
+    process.env.DISABLE_DEMO_LOGIN !== 'true'
+);
+
+const passwordMatches = async (plainPassword, hashedPassword) => {
+    try {
+        return await bcrypt.compare(plainPassword, hashedPassword || '');
+    } catch (err) {
+        return false;
+    }
+};
+
+const sendLoginResponse = (res, user) => {
+    const payload = {
+        id: user._id ? user._id.toString() : user.id,
+        username: user.username,
+        role: user.role
+    };
+
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+
+    return res.json({
+        message: 'Login successful',
+        token,
+        user: payload
+    });
+};
+
+// Initialize/repair default demo users so the credentials shown on Login.jsx work.
 const initDefaultUsers = async () => {
     try {
-        const adminExists = await User.findOne({ username: 'admin' });
-        if (!adminExists) {
-            const hashedAdminPassword = await bcrypt.hash('password123', 10);
-            await User.create({ username: 'admin', password: hashedAdminPassword, role: 'admin' });
-            console.log('Default Admin created');
-        }
+        for (const demoUser of DEMO_USERS) {
+            const existingUser = await User.findOne({ username: demoUser.username });
 
-        const staffExists = await User.findOne({ username: 'staff' });
-        if (!staffExists) {
-            const hashedStaffPassword = await bcrypt.hash('password123', 10);
-            await User.create({ username: 'staff', password: hashedStaffPassword, role: 'staff' });
-            console.log('Default Staff created');
+            if (!existingUser) {
+                const hashedPassword = await bcrypt.hash(demoUser.password, 10);
+                await User.create({
+                    username: demoUser.username,
+                    password: hashedPassword,
+                    role: demoUser.role
+                });
+                console.log(`Default ${demoUser.role} created`);
+                continue;
+            }
+
+            const updates = {};
+            const hasExpectedPassword = await passwordMatches(demoUser.password, existingUser.password);
+
+            if (!hasExpectedPassword) {
+                updates.password = await bcrypt.hash(demoUser.password, 10);
+            }
+
+            if (existingUser.role !== demoUser.role) {
+                updates.role = demoUser.role;
+            }
+
+            if (Object.keys(updates).length) {
+                await User.updateOne({ _id: existingUser._id }, { $set: updates });
+                console.log(`Default ${demoUser.role} repaired`);
+            }
         }
     } catch (err) {
         console.error('Error initializing default users:', err);
     }
 };
 
-// Call initialization
-initDefaultUsers();
-
 // Login Route
 router.post('/login', async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const username = normalizeUsername(req.body?.username);
+        const password = typeof req.body?.password === 'string' ? req.body.password : '';
 
-        // 1. Find user by username
-        const user = await User.findOne({ username });
-        if (!user) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Username and password are required' });
         }
 
-        // 2. Check password
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+        let user = null;
+
+        if (mongoose.connection.readyState === 1) {
+            user = await User.findOne({ username });
         }
 
-        // 3. Create JWT payload
-        const payload = {
-            id: user._id,
-            username: user.username,
-            role: user.role
-        };
+        if (user) {
+            const isMatch = await passwordMatches(password, user.password);
+            if (!isMatch) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
 
-        // 4. Sign token
-        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
+            return sendLoginResponse(res, user);
+        }
 
-        // 5. Return success with token and basic user info
-        res.json({
-            message: 'Login successful',
-            token,
-            user: payload
-        });
+        if (isDemoFallbackEnabled()) {
+            const demoUser = DEMO_USERS.find((item) => item.username === username);
+
+            if (demoUser && password === demoUser.password) {
+                return sendLoginResponse(res, {
+                    id: `demo-${demoUser.username}`,
+                    username: demoUser.username,
+                    role: demoUser.role
+                });
+            }
+        }
+
+        return res.status(401).json({ error: 'Invalid credentials' });
 
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
+
+router.initDefaultUsers = initDefaultUsers;
 
 module.exports = router;
