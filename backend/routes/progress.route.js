@@ -1,0 +1,95 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const router = express.Router();
+const Progress = require('../models/Progress');
+
+// ── In-memory fallback store (used when MongoDB is unavailable) ──
+let memoryProgressIdCounter = 1;
+let memoryProgressLogs = [];
+
+// Check whether the MongoDB connection is ready.
+const isDbConnected = () => mongoose.connection.readyState === 1;
+
+// @route   POST api/progress/add
+// @desc    Save a new monthly measurement log
+router.post('/add', async (req, res) => {
+    try {
+        const { memberId, weight, chest, waist } = req.body;
+
+        if (!isDbConnected()) {
+            const newLog = {
+                _id: `progress-${memoryProgressIdCounter++}`,
+                memberId,
+                weight,
+                chest,
+                waist,
+                date: new Date().toISOString()
+            };
+            memoryProgressLogs.push(newLog);
+            return res.status(201).json(newLog);
+        }
+        
+        const newLog = new Progress({
+            memberId,
+            weight,
+            chest,
+            waist,
+            date: new Date() // Automatically sets the current date
+        });
+
+        await newLog.save();
+        res.status(201).json(newLog);
+    } catch (err) {
+        console.error("Error saving progress:", err.message);
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// @route   GET api/progress/:memberId
+// @desc    Get all measurement logs for a specific member
+router.get('/:memberId', async (req, res) => {
+    try {
+        if (!isDbConnected()) {
+            const history = memoryProgressLogs
+                .filter(log => log.memberId === req.params.memberId)
+                .sort((a, b) => new Date(b.date) - new Date(a.date));
+            return res.json(history);
+        }
+
+        const history = await Progress.find({ memberId: req.params.memberId })
+            .sort({ date: -1 }); // Shows newest entries first
+        res.json(history);
+    } catch (err) {
+        console.error("Error fetching history:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   DELETE api/progress/:id
+// @desc    Delete a specific measurement log by its MongoDB _id
+router.delete('/:id', async (req, res) => {
+    try {
+        if (!isDbConnected()) {
+            const idx = memoryProgressLogs.findIndex(log => log._id === req.params.id);
+            if (idx === -1) {
+                return res.status(404).json({ message: "Log entry not found" });
+            }
+            memoryProgressLogs.splice(idx, 1);
+            return res.json({ message: "Log deleted successfully" });
+        }
+
+        const deletedLog = await Progress.findByIdAndDelete(req.params.id);
+        
+        if (!deletedLog) {
+            return res.status(404).json({ message: "Log entry not found" });
+        }
+
+        console.log(`Successfully deleted log: ${req.params.id}`);
+        res.json({ message: "Log deleted successfully" });
+    } catch (err) {
+        console.error("Error deleting log:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+module.exports = router;
